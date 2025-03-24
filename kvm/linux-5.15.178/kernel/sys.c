@@ -2743,11 +2743,11 @@ COMPAT_SYSCALL_DEFINE1(sysinfo, struct compat_sysinfo __user *, info)
 }
 #endif /* CONFIG_COMPAT */
 
-
-SYSCALL_DEFINE1(addtotal,int,numdata)
+SYSCALL_DEFINE1(addtotal, int, numdata)
 {
 	int i = 0, enddata = 0;
 	while (i <= numdata)
 		enddata += i++;
 	return enddata;
 }
+

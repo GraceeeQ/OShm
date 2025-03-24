@@ -64,6 +64,18 @@ run:
 	make init_build
 	cp ./edk2/Build/MyAcpiPkg/DEBUG_GCC5/X64/MyAcpi.efi ovmf/esp
 	make ovmf
+headers:
+	make -C kvm/linux-5.15.178 headers
 
+# build_kernel:
+# 	make headers
+# 	make -C kvm/linux-5.15.178 -j$(nproc) 
+	
+ctest:
+	gcc -static -o ./ctest/$(project) ./ctest/$(project).c
+	cp ./ctest/$(project) ./kvm/busybox-1.35.0/_install/bin/
+	cd kvm/busybox-1.35.0/_install && \
+	find . -print0 | cpio --null -ov --format=newc | gzip -9 > ../initramfs.cpio.gz
+	make only_kernel 
 
-.PHONY: init_edk only_kernel only_ovmf kernel_and_ovmf server_bios server toy_esp ovmf
+.PHONY: init_edk only_kernel only_ovmf kernel_and_ovmf server_bios server toy_esp ovmf ctest
