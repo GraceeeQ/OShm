@@ -715,28 +715,30 @@ struct kmap_ctrl {
 };
 
 struct task_struct {
-	struct hlist_head kv_store[1024];
-	spinlock_t kv_store_lock[1024];
-#ifdef CONFIG_THREAD_INFO_IN_TASK
+	#ifdef CONFIG_THREAD_INFO_IN_TASK
 	/*
-	 * For reasons of header soup (see current_thread_info()), this
-	 * must be the first element of task_struct.
-	 */
-	struct thread_info		thread_info;
+	* For reasons of header soup (see current_thread_info()), this
+	* must be the first element of task_struct.
+	*/
+struct thread_info		thread_info;
 #endif
-	unsigned int			__state;
+unsigned int			__state;
 
 #ifdef CONFIG_PREEMPT_RT
-	/* saved state for "spinlock sleepers" */
-	unsigned int			saved_state;
+/* saved state for "spinlock sleepers" */
+unsigned int			saved_state;
 #endif
 
-	/*
-	 * This begins the randomizable portion of task_struct. Only
-	 * scheduling-critical items should be added above here.
-	 */
+/*
+* This begins the randomizable portion of task_struct. Only
+* scheduling-critical items should be added above here.
+*/
 	randomized_struct_fields_start
 
+	struct hlist_head *kv_store;
+	spinlock_t *kv_store_lock;
+	// struct hlist_head kv_store[1024];
+	// spinlock_t kv_store_lock[1024];
 	void				*stack;
 	refcount_t			usage;
 	/* Per task flags (PF_*), defined further below: */

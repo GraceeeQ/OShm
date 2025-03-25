@@ -22,7 +22,8 @@ only_kernel:
 		-kernel "${KERNEL}" \
 		-initrd "${INITRAMFS}" \
 		-nographic \
-		-append "init=/init console=ttyS0"
+		-append "init=/init console=ttyS0"\
+		-s -S
 
 only_ovmf:
 	qemu-system-x86_64 \
@@ -72,7 +73,7 @@ headers:
 # 	make -C kvm/linux-5.15.178 -j$(nproc) 
 	
 ctest:
-	gcc -static -o ./ctest/$(project) ./ctest/$(project).c
+	g++ -static -o ./ctest/$(project) ./ctest/$(project).cpp
 	cp ./ctest/$(project) ./kvm/busybox-1.35.0/_install/bin/
 	cd kvm/busybox-1.35.0/_install && \
 	find . -print0 | cpio --null -ov --format=newc | gzip -9 > ../initramfs.cpio.gz
