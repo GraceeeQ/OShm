@@ -715,24 +715,24 @@ struct kmap_ctrl {
 };
 
 struct task_struct {
-	#ifdef CONFIG_THREAD_INFO_IN_TASK
+#ifdef CONFIG_THREAD_INFO_IN_TASK
 	/*
-	* For reasons of header soup (see current_thread_info()), this
-	* must be the first element of task_struct.
-	*/
-struct thread_info		thread_info;
+	 * For reasons of header soup (see current_thread_info()), this
+	 * must be the first element of task_struct.
+	 */
+	struct thread_info		thread_info;
 #endif
-unsigned int			__state;
+	unsigned int			__state;
 
 #ifdef CONFIG_PREEMPT_RT
-/* saved state for "spinlock sleepers" */
-unsigned int			saved_state;
+	/* saved state for "spinlock sleepers" */
+	unsigned int			saved_state;
 #endif
 
-/*
-* This begins the randomizable portion of task_struct. Only
-* scheduling-critical items should be added above here.
-*/
+	/*
+	 * This begins the randomizable portion of task_struct. Only
+	 * scheduling-critical items should be added above here.
+	 */
 	randomized_struct_fields_start
 
 	struct hlist_head *kv_store;
@@ -878,9 +878,7 @@ unsigned int			saved_state;
 	unsigned			sched_reset_on_fork:1;
 	unsigned			sched_contributes_to_load:1;
 	unsigned			sched_migrated:1;
-#ifdef CONFIG_PSI
-	unsigned			sched_psi_wake_requeue:1;
-#endif
+	unsigned			sched_task_hot:1;
 
 	/* Force alignment to the next boundary: */
 	unsigned			:0;
