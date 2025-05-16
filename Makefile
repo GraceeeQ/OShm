@@ -80,7 +80,7 @@ build_kernel:
 	
 ctest:
 	# g++ -static -o ./ctest/$(project) ./ctest/$(project).cpp
-	# cp ./ctest/$(project) ./kvm/busybox-1.35.0/_install/bin/
+	cp ./ctest/$(project).cpp ./kvm/busybox-1.35.0/_install/bin/
 	cd kvm/busybox-1.35.0/_install && \
 	find . -print0 |	 cpio --null -ov --format=newc | gzip -9 > ../initramfs.cpio.gz
 	make only_kernel 
