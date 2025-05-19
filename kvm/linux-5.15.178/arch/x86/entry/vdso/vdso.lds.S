@@ -30,10 +30,8 @@ VERSION {
 #ifdef CONFIG_X86_SGX
 		__vdso_sgx_enter_enclave;
 #endif
-//		number_of_the_beast;
-//        __vdso_number_of_the_beast;
-//		get_task_struct_info;
-//		__vdso_get_task_info;
+		get_task_struct_info;
+        __vdso_get_task_struct_info;
 	local: *;
 	};
 }

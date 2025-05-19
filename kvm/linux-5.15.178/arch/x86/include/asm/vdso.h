@@ -6,15 +6,15 @@
 #include <linux/linkage.h>
 #include <linux/init.h>
 
-// /* 为task_struct添加额外的VVAR页 */
-// #define VVAR_TASK_STRUCT_NR_PAGES (4) /* 根据实际task_struct大小调整 */
-// #define VVAR_NR_PAGES     (2)        /* 原始VVAR页数量 */
-// #define VVAR_TOTAL_PAGES  (VVAR_NR_PAGES + VVAR_TASK_STRUCT_NR_PAGES)
+/* 为task_struct添加额外的VVAR页 */
+#define VVAR_TASK_STRUCT_NR_PAGES (12) /* 根据实际task_struct大小调整 */
+#define VVAR_NR_PAGES     (2)        /* 原始VVAR页数量 */
+#define VVAR_TOTAL_PAGES  (VVAR_NR_PAGES + VVAR_TASK_STRUCT_NR_PAGES)
 
-// /* VVAR页偏移量定义 */
-// #define VVAR_DATA_PAGE_OFFSET     0
-// #define VVAR_TIMENS_PAGE_OFFSET   1
-// #define VVAR_TASK_STRUCT_OFFSET   2  /* task_struct从第3页开始 */
+/* VVAR页偏移量定义 */
+#define VVAR_DATA_PAGE_OFFSET     0
+#define VVAR_TIMENS_PAGE_OFFSET   1
+#define VVAR_TASK_STRUCT_OFFSET   2  /* task_struct从第3页开始 */
 
 #ifndef __ASSEMBLER__
 

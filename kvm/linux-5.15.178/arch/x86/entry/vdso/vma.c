@@ -20,12 +20,23 @@
 #include <asm/vgtod.h>
 #include <asm/proto.h>
 #include <asm/vdso.h>
+#include <asm/mmu.h>
 #include <asm/vvar.h>
 #include <asm/tlb.h>
 #include <asm/page.h>
 #include <asm/desc.h>
 #include <asm/cpufeature.h>
 #include <clocksource/hyperv_timer.h>
+
+#include <linux/highmem.h>
+#include <linux/gfp.h>
+#include <linux/vm_event_item.h>
+
+#include <linux/sched.h>
+#include <linux/vdso_task.h>
+
+
+// #define VTASK_SIZE  ALIGN(sizeof(struct task_struct), PAGE_SIZE)
 
 #undef _ASM_X86_VVAR_H
 #define EMIT_VVAR(name, offset)	\
@@ -228,6 +239,99 @@ static vm_fault_t vvar_fault(const struct vm_special_mapping *sm,
 	return VM_FAULT_SIGBUS;
 }
 
+// static vm_fault_t vtask_fault(
+//     const struct vm_special_mapping *sm,
+//     struct vm_area_struct *vma,
+//     struct vm_fault *vmf)
+// {
+// 	struct task_struct *task = current;
+//     unsigned long task_phys_addr = virt_to_phys(task);
+//     unsigned long pfn = task_phys_addr >> PAGE_SHIFT;
+//     unsigned long task_offset = task_phys_addr & ~PAGE_MASK;  // 计算页内偏移量
+//     struct vdso_data *vdso_data;
+	
+//     printk(KERN_INFO "pass checkpoint 00\n");
+// 	printk(KERN_INFO "vmf->address = %lx\n vmf->pgoff = %lx\n pfn = %lx\n task_phys_addr = %lx\n task = %lx\n", vmf->address, vmf->pgoff, pfn, task_phys_addr, task);
+//     printk(KERN_INFO "task offset = %lx\n", task_offset);
+// 	printk(KERN_INFO "vdso_data addr = %lx\n", (unsigned long)arch_get_vdso_data(current->mm->context.vdso));
+//     /* 只在第一次页面错误时更新vdso_data中的偏移量 */
+//     if (vmf->pgoff == 0) {
+//         /* 获取vdso_data的地址 */
+//         vdso_data = arch_get_vdso_data(current->mm->context.vdso);
+//         if (vdso_data) {
+//             /* 保存偏移量和大小到vdso_data */
+//             vdso_data->vtask_offset = task_offset;
+//             vdso_data->vtask_size = sizeof(struct task_struct);
+//             printk(KERN_INFO "Saved task_offset %lx to vdso_data\n", task_offset);
+//         }
+//     }
+
+//     /*
+//      * 只允许访问task_struct所在的页面范围内
+//      * 防止越界访问
+//      */
+// 	printk(KERN_INFO "pass checkpoint 01\n");
+//     if (vmf->pgoff >= (VTASK_SIZE >> PAGE_SHIFT))
+//         return VM_FAULT_SIGBUS;
+//     printk(KERN_INFO "pass checkpoint 02\n");
+//     /* 将task_struct的物理页映射到用户空间 */
+//     return vmf_insert_pfn_prot(vma, vmf->address,
+//                              pfn + vmf->pgoff,
+//                              pgprot_noncached(vma->vm_page_prot));
+
+// }
+static vm_fault_t vtask_fault(
+    const struct vm_special_mapping *sm,
+    struct vm_area_struct *vma,
+    struct vm_fault *vmf)
+{
+    printk(KERN_INFO "vtask_fault: handling page fault at offset %lx\n", vmf->pgoff);
+    
+    struct page *page;
+    struct task_struct *task = current;
+    void *src_addr, *dst_addr;
+    size_t copy_size;
+    
+    /* 检查偏移量是否超出范围 */
+    if (vmf->pgoff >= (VTASK_SIZE >> PAGE_SHIFT)) {
+        printk(KERN_WARNING "vtask_fault: offset out of bounds %lx\n", vmf->pgoff);
+        return VM_FAULT_SIGBUS;
+    }
+    
+    /* 分配新的页面 */
+    page = alloc_page(GFP_KERNEL);
+    if (!page) {
+        printk(KERN_WARNING "vtask_fault: failed to allocate page\n");
+        return VM_FAULT_OOM;
+    }
+    
+    /* 计算源地址和目标地址 */
+    src_addr = (void *)task + (vmf->pgoff << PAGE_SHIFT);
+    dst_addr = page_address(page);
+    
+    /* 确定要复制的大小 (不超过一个页面) */
+    copy_size = min_t(size_t, PAGE_SIZE, 
+                     sizeof(struct task_struct) - (vmf->pgoff << PAGE_SHIFT));
+    
+    if (copy_size <= 0) {
+        /* 超出了task_struct范围，但在允许的页面偏移内 */
+        /* 为安全起见，填充零值 */
+        memset(dst_addr, 0, PAGE_SIZE);
+    } else {
+        /* 拷贝task_struct的内容到新页面 */
+        memcpy(dst_addr, src_addr, copy_size);
+        
+        /* 如果不足一页，剩余部分填零 */
+        if (copy_size < PAGE_SIZE)
+            memset(dst_addr + copy_size, 0, PAGE_SIZE - copy_size);
+    }
+    
+    /* 将页面映射到用户空间 */
+    vmf->page = page;
+    return 0;
+}
+
+
 static const struct vm_special_mapping vdso_mapping = {
 	.name = "[vdso]",
 	.fault = vdso_fault,
@@ -236,6 +340,10 @@ static const struct vm_special_mapping vdso_mapping = {
 static const struct vm_special_mapping vvar_mapping = {
 	.name = "[vvar]",
 	.fault = vvar_fault,
+};
+static const struct vm_special_mapping vtask_mapping = {
+	.name = "[vtask]",
+    .fault = vtask_fault,
 };
 
 /*
@@ -248,6 +356,7 @@ static int map_vdso(const struct vdso_image *image, unsigned long addr)
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *vma;
 	unsigned long text_start;
+	unsigned long vtask_addr = 0;    // 新增
 	int ret = 0;
 
 	if (mmap_write_lock_killable(mm))
@@ -265,6 +374,8 @@ static int map_vdso(const struct vdso_image *image, unsigned long addr)
 	/*
 	 * MAYWRITE to allow gdb to COW and set breakpoints
 	 */
+	printk(KERN_INFO "addr = %lx", addr);
+	printk(KERN_INFO "text_start = %lx, image->size = %lx\n", text_start, image->size);
 	vma = _install_special_mapping(mm,
 				       text_start,
 				       image->size,
@@ -276,21 +387,40 @@ static int map_vdso(const struct vdso_image *image, unsigned long addr)
 		ret = PTR_ERR(vma);
 		goto up_fail;
 	}
-
+	printk(KERN_INFO "addr = %lx, -image->sym_vvar_start = %lx\n", addr, -image->sym_vvar_start);
 	vma = _install_special_mapping(mm,
 				       addr,
 				       -image->sym_vvar_start,
 				       VM_READ|VM_MAYREAD|VM_IO|VM_DONTDUMP|
 				       VM_PFNMAP,
 				       &vvar_mapping);
-
+	printk(KERN_INFO "pass checkpoint 0\n");
 	if (IS_ERR(vma)) {
-		ret = PTR_ERR(vma);
-		do_munmap(mm, text_start, image->size, NULL);
-	} else {
-		current->mm->context.vdso = (void __user *)text_start;
-		current->mm->context.vdso_image = image;
-	}
+        ret = PTR_ERR(vma);
+        do_munmap(mm, text_start, image->size, NULL);
+        goto up_fail;
+    }
+	printk(KERN_INFO "pass checkpoint 1\n");
+	vtask_addr = addr - VTASK_SIZE;
+	printk(KERN_INFO "vtask_addr = %lx, VTASK_SIZE = %lx\n", vtask_addr, VTASK_SIZE);
+    vma = _install_special_mapping(mm,
+                       vtask_addr,
+                       VTASK_SIZE,
+                       VM_READ|VM_MAYREAD|VM_IO|VM_DONTDUMP|VM_PFNMAP,
+                       &vtask_mapping);
+	printk(KERN_INFO "pass checkpoint 2\n");
+    if (IS_ERR(vma)) {
+		printk(KERN_INFO "into errrr\n");
+        ret = PTR_ERR(vma);
+        do_munmap(mm, addr, -image->sym_vvar_start, NULL);
+        do_munmap(mm, text_start, image->size, NULL);
+		goto up_fail;
+    } 
+	printk(KERN_INFO "pass checkpoint 3\n");
+    current->mm->context.vdso = (void __user *)text_start;
+    current->mm->context.vdso_image = image;
+	printk(KERN_INFO "pass checkpoint 4\n");
+    current->mm->context.vtask = (void __user *)vtask_addr;  // 保存vtask映射地址
 
 up_fail:
 	mmap_write_unlock(mm);
@@ -346,6 +476,7 @@ static int map_vdso_randomized(const struct vdso_image *image)
 {
 	unsigned long addr = vdso_addr(current->mm->start_stack, image->size-image->sym_vvar_start);
 
+	printk(KERN_INFO "map_vdso_randomized: addr = %lx\n", addr);
 	return map_vdso(image, addr);
 }
 #endif
@@ -365,13 +496,15 @@ int map_vdso_once(const struct vdso_image *image, unsigned long addr)
 	 */
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		if (vma_is_special_mapping(vma, &vdso_mapping) ||
-				vma_is_special_mapping(vma, &vvar_mapping)) {
+				vma_is_special_mapping(vma, &vvar_mapping)
+				||vma_is_special_mapping(vma, &vtask_mapping)
+			) {
 			mmap_write_unlock(mm);
 			return -EEXIST;
 		}
 	}
 	mmap_write_unlock(mm);
-
+	printk(KERN_INFO "map_vdso_once: addr = %lx\n", addr);
 	return map_vdso(image, addr);
 }
 
@@ -390,7 +523,7 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 {
 	if (!vdso64_enabled)
 		return 0;
-
+	printk(KERN_INFO "arch_setup_additional_pages: addr = %lx\n", 0);
 	return map_vdso_randomized(&vdso_image_64);
 }
 

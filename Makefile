@@ -80,7 +80,11 @@ build_kernel:
 	
 ctest:
 	# g++ -static -o ./ctest/$(project) ./ctest/$(project).cpp
-	cp ./ctest/$(project).cpp ./kvm/busybox-1.35.0/_install/bin/
+	# gcc -static -o ./ctest/$(project) ./ctest/$(project).c
+	# g++ -static -o ./ctest/$(project) ./ctest/$(project).cpp
+	# g++ -ldl -Wall -I ./kvm/linux-5.15.178/usr/include  -o ./ctest/$(project) ./ctest/$(project).cpp
+	gcc -static -ldl -Wall -o ./ctest/$(project) ./ctest/$(project).c
+	cp ./ctest/$(project) ./kvm/busybox-1.35.0/_install/bin/
 	cd kvm/busybox-1.35.0/_install && \
 	find . -print0 |	 cpio --null -ov --format=newc | gzip -9 > ../initramfs.cpio.gz
 	make only_kernel 

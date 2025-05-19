@@ -28,6 +28,10 @@ SECTIONS
 	hvclock_page = vvar_start + 2 * PAGE_SIZE;
 	timens_page  = vvar_start + 3 * PAGE_SIZE;
 
+	/* 添加：为task_struct定义起始页面 */
+    vtask_page = vvar_start + VVAR_TASK_STRUCT_OFFSET * PAGE_SIZE;
+
+
 #undef _ASM_X86_VVAR_H
 	/* Place all vvars in timens too at the offsets in asm/vvar.h. */
 #define EMIT_VVAR(name, offset) timens_ ## name = timens_page + offset;

@@ -13,7 +13,7 @@
 /* vsyscall page is accessible on this MM */
 #define MM_CONTEXT_HAS_VSYSCALL	BIT(1)
 
-// #define VTASK_SIZE (PAGE_SIZE * VVAR_TASK_STRUCT_NR_PAGES)
+#define VTASK_SIZE (PAGE_SIZE * VVAR_TASK_STRUCT_NR_PAGES)
 /*
  * x86 has arch-specific MMU state beyond what lives in mm_struct.
  */
@@ -48,7 +48,7 @@ typedef struct {
 	struct mutex lock;
 	void __user *vdso;			/* vdso base address */
 	const struct vdso_image *vdso_image;	/* vdso image in use */
-	// void __user *vtask;
+	void __user *vtask;
 
 	atomic_t perf_rdpmc_allowed;	/* nonzero if rdpmc is allowed */
 #ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
