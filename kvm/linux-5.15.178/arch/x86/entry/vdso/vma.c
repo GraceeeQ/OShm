@@ -297,8 +297,8 @@ static vm_fault_t vtask_fault(
         metadata->task_size = sizeof(struct task_struct);
         memset(metadata->reserved, 0, sizeof(metadata->reserved));
         
-        printk(KERN_INFO "Metadata page created with offset=%lx, size=%zu\n", 
-               metadata->task_offset, metadata->task_size);
+        // printk(KERN_INFO "Metadata page created with offset=%lx, size=%zu\n", 
+        //        metadata->task_offset, metadata->task_size);
         
         /* 返回新分配的页面 */
         vmf->page = metadata_page;
@@ -437,7 +437,7 @@ static int map_vdso(const struct vdso_image *image, unsigned long addr)
 	 * MAYWRITE to allow gdb to COW and set breakpoints
 	 */
 	// printk(KERN_INFO "addr = %lx", addr);
-	printk(KERN_INFO "text_start = %lx, image->size = %lx\n", text_start, image->size);
+	// printk(KERN_INFO "text_start = %lx, image->size = %lx\n", text_start, image->size);
 	vma = _install_special_mapping(mm,
 				       text_start,
 				       image->size,
@@ -449,7 +449,7 @@ static int map_vdso(const struct vdso_image *image, unsigned long addr)
 		ret = PTR_ERR(vma);
 		goto up_fail;
 	}
-	printk(KERN_INFO "addr = %lx, -image->sym_vvar_start = %lx\n", addr, -image->sym_vvar_start);
+	// printk(KERN_INFO "addr = %lx, -image->sym_vvar_start = %lx\n", addr, -image->sym_vvar_start);
 	vma = _install_special_mapping(mm,
 				       addr,
 				       -image->sym_vvar_start,
@@ -464,7 +464,7 @@ static int map_vdso(const struct vdso_image *image, unsigned long addr)
     }
 	//printk(KERN_INFO "pass checkpoint 1\n");
 	vtask_addr = addr - VTASK_SIZE;
-	printk(KERN_INFO "vtask_addr = %lx, VTASK_SIZE = %lx\n", vtask_addr, VTASK_SIZE);
+	// printk(KERN_INFO "vtask_addr = %lx, VTASK_SIZE = %lx\n", vtask_addr, VTASK_SIZE);
     vma = _install_special_mapping(mm,
                        vtask_addr,
                        VTASK_SIZE,
