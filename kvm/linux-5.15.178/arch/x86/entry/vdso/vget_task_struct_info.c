@@ -18,14 +18,14 @@
 int __vdso_get_task_struct_info(struct task_info *info)
 {
     const struct vdso_data *vdata = __arch_get_vdso_data();
-    void __user *vtask;
-    
-    /*
-     * 在VDSO中，我们不能直接访问current
-     * 需要从已映射的vvar区域获取信息
-     */
-    
-    /* 检查info参数 */
+    void __user *vtask_base;
+    unsigned long metadata_offset;
+    struct task_metadata {
+        unsigned long magic;
+        unsigned long task_offset;
+        unsigned long task_size;
+        char reserved[4072];
+    } *metadata;
     if (!info)
         return -EINVAL;
     
@@ -33,25 +33,23 @@ int __vdso_get_task_struct_info(struct task_info *info)
      * 使用vdso_data作为基础，计算vtask位置
      * vdso_data结构总是位于vvar页的开头，所以可以用它作为参考点
      */
-    vtask = (void __user *)(((unsigned long)vdata >> PAGE_SHIFT << PAGE_SHIFT) -  
+    vtask_base = (void __user *)(((unsigned long)vdata >> PAGE_SHIFT << PAGE_SHIFT) -  
                            VVAR_TASK_STRUCT_NR_PAGES * PAGE_SIZE);
-    
-    if (!vtask)
+    if (!vtask_base)
         return -EINVAL;
-    
-    /* 从vdso_data中获取保存的偏移量 */
-    unsigned long task_offset = vdata->vtask_offset;
+    metadata_offset = VTASK_SIZE - PAGE_SIZE;
+    metadata = (struct task_metadata *)((char *)vtask_base + metadata_offset);
+    if (metadata->magic != 0x54534B4D)
+        return -EINVAL;
+    unsigned long task_offset = metadata->task_offset;
     // unsigned long task_offset = 0;
     
     /* 从映射的task_struct中直接读取PID */
-    info->pid = *(pid_t *)((char *)vtask + task_offset + offsetof(struct task_struct, pid));
+    info->task_struct_ptr = (void *)((char *)vtask_base + task_offset);
+    // info->pid = *(pid_t *)((char *)vtask_base + task_offset + offsetof(struct task_struct, pid));
+    info->pid = *(pid_t *)((char *)info->task_struct_ptr + 
+                          offsetof(struct task_struct, pid));
     
-    /* 
-     * 将task_struct的用户空间地址返回给用户
-     * 用户可以直接读取此地址的内容获取task信息
-     */
-    info->task_struct_ptr = (void *)((char *)vtask + task_offset);
-
     return 0;
 }
 
