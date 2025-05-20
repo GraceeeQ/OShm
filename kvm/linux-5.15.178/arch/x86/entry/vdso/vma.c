@@ -424,7 +424,8 @@ static int map_vdso(const struct vdso_image *image, unsigned long addr)
 		return -EINTR;
 
 	addr = get_unmapped_area(NULL, addr,
-				 image->size - image->sym_vvar_start, 0, 0);
+				 image->size - image->sym_vvar_start + VTASK_SIZE, 0, 0);
+	addr += VTASK_SIZE;
 	if (IS_ERR_VALUE(addr)) {
 		ret = addr;
 		goto up_fail;
