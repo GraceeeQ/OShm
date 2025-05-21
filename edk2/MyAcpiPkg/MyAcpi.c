@@ -12,7 +12,7 @@ EFIAPI
 UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
 {
     EFI_STATUS Status = EFI_SUCCESS;
-    // PrintAllACPITables();
+    PrintAllACPITables();
     EFI_ACPI_DESCRIPTION_HEADER emptyTable = {0};
     ChangeACPITable(1, &emptyTable);
     ChangeACPITable(2, &emptyTable);
@@ -130,6 +130,14 @@ VOID ChangeACPITable(UINTN index, EFI_ACPI_DESCRIPTION_HEADER *newTable)
             EFI_ACPI_DESCRIPTION_HEADER *Xsdt = (VOID *)Root->XsdtAddress;
             UINT64 *Entry = (UINT64 *)(Xsdt + 1);
             EFI_ACPI_DESCRIPTION_HEADER *table = (EFI_ACPI_DESCRIPTION_HEADER *)Entry[index];
+            //print name
+            Print(L"changing table %d ", index);
+            for (int i = 0; i < 4; i++)
+            {
+                Print(L"%c", table->Signature >> (i * 8) & 0xff);
+            }
+            Print(L"\n");
+
             CopyMem(table, newTable, table->Length);
             // Entry[index] = (UINT64)newTable;
             // EFI_ACPI_DESCRIPTION_HEADER *table = (EFI_ACPI_DESCRIPTION_HEADER *)Entry[index];

@@ -89,4 +89,38 @@ ctest:
 	find . -print0 |	 cpio --null -ov --format=newc | gzip -9 > ../initramfs.cpio.gz
 	make only_kernel 
 
+start_uefi:
+	qemu-system-x86_64 \
+		-m 4G \
+		-enable-kvm \
+		-drive if=pflash,format=raw,readonly=on,file="${OVMF_DIR}/OVMF_CODE.fd" \
+		-drive if=pflash,format=raw,file="${OVMF_DIR}/OVMF_VARS.fd" \
+		-drive file=fat:rw:./uefi,format=raw,if=ide,index=0 \
+		-nographic \
+		-drive file=shared_disk.qcow2,format=qcow2,if=ide
+
+
+
+		# -virtfs local,path=/run/media/grace/archlinux_data/OS/hm/qemu_shared,mount_tag=hostshare,security_model=mapped-file,id=host0
+
+
+		# -device virtio-9p-pci,fsdev=fs0,mount_tag=hostshare \
+    	# -fsdev local,security_model=none,id=fs0,path=/run/media/grace/archlinux_data/OS/hm/qemu_shared
+
+
+
+
+
+		# -no-reboot
+
+initramfs_and_copy:
+	cd kvm/busybox-1.35.0/_install && find . -print0 |	 cpio --null -ov --format=newc | gzip -9 > ../initramfs.cpio.gz
+	cp ${INITRAMFS} ./uefi
+
+copy_kernel2uefi:
+	cp ${KERNEL} ./uefi
+
+copy_myuefi:
+	cp ./edk2/Build/MyAcpiPkg/DEBUG_GCC5/X64/MyAcpi.efi ./uefi
+
 .PHONY: init_edk only_kernel only_ovmf kernel_and_ovmf server_bios server toy_esp ovmf ctest
