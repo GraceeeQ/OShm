@@ -147,3 +147,4 @@ VOID ChangeACPITable(UINTN index, EFI_ACPI_DESCRIPTION_HEADER *newTable)
         }
     }
 }
+

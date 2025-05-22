@@ -1,0 +1,31 @@
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = MyAddAcpiApp
+  FILE_GUID                      = 12345678-9ABC-DEF0-1234-56789ABCDEF0
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = UefiMain
+
+[Sources]
+  MyAddAcpiApp.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  MyAddAcpiPkg/MyAddAcpiPkg.dec
+
+[LibraryClasses]
+  UefiApplicationEntryPoint
+  UefiBootServicesTableLib
+  UefiRuntimeServicesTableLib
+  UefiLib
+  PrintLib
+  DebugLib
+  BaseMemoryLib
+  BaseLib
+
+[Protocols]
+  gEfiAcpiTableProtocolGuid      ## CONSUMES
+  
+[Guids]
+  gMyAddAcpiTableGuid

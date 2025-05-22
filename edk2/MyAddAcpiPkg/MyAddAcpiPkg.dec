@@ -1,0 +1,11 @@
+[Defines]
+  DEC_SPECIFICATION              = 0x00010005
+  PACKAGE_NAME                   = MyAddAcpiPkg
+  PACKAGE_GUID                   = 11111111-2222-3333-4444-555555555555
+  PACKAGE_VERSION                = 0.1
+
+[Includes]
+  Include
+
+[Guids]
+  gMyAddAcpiTableGuid = { 0xaaaaaaaa, 0xbbbb, 0xcccc, { 0xdd, 0xdd, 0xee, 0xee, 0xff, 0xff, 0xff, 0xff }}

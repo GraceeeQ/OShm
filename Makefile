@@ -12,7 +12,7 @@ OVMF_DIR = ./edk2/Build/OvmfX64/DEBUG_GCC5/FV
 KERNEL = ./kvm/linux-5.15.178/arch/x86/boot/bzImage
 INITRAMFS = ./kvm/busybox-1.35.0/initramfs.cpio.gz
 
-init_build:
+edk2_build:
 	cd edk2 && \
 	export EDK_TOOLS_PATH=${HM_DIR}/edk2/BaseTools && \
 	source edksetup.sh BaseTools && \
@@ -68,7 +68,7 @@ ovmf:
 		-nographic \
 
 run:
-	make init_build
+	make edk2_build
 	cp ./edk2/Build/MyAcpiPkg/DEBUG_GCC5/X64/MyAcpi.efi ovmf/esp
 	make ovmf
 headers:
@@ -122,5 +122,6 @@ copy_kernel2uefi:
 
 copy_myuefi:
 	cp ./edk2/Build/MyAcpiPkg/DEBUG_GCC5/X64/MyAcpi.efi ./uefi
+	cp ./edk2/Build/MyAddAcpiPkg/DEBUG_GCC5/X64/MyAddAcpiApp.efi ./uefi
 
 .PHONY: init_edk only_kernel only_ovmf kernel_and_ovmf server_bios server toy_esp ovmf ctest
