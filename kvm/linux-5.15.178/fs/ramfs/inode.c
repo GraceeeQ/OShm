@@ -45,6 +45,8 @@
 #include <linux/path.h>
 #include <linux/namei.h>
 #include <linux/proc_fs.h>
+#include <linux/syscalls.h>
+#include "../internal.h"
 /* 文件持久化接口 */
 int ramfs_bind(const char *ramfs_path, const char *sync_dir);
 int ramfs_file_flush(struct file *file);
@@ -689,7 +691,7 @@ int ramfs_file_flush(struct file *file)
     snprintf(tmp_path, PATH_MAX, "%s/.%s.%lx.%lx.%d.tmp", 
          fsi->sync_dir, filename, 
          (unsigned long)ktime_get_real_seconds(),
-         (unsigned long)ktime_get_ns() & 0xFFFFFFFF, /* 纳秒部分 */
+         (unsigned long)ktime_get_ns(), /* 纳秒部分 */
          current->pid); /* 进程ID */
     //printk(KERN_INFO "Ramfs_file_flush: checkpoint2\n");
     /* 构建最终文件路径 */
@@ -802,22 +804,57 @@ int ramfs_file_flush(struct file *file)
 	    .flags = 0,
 	};
 	//printk(KERN_INFO "Ramfs_file_flush: checkpoint4\n");
-	inode_lock(d_inode(old_path.dentry->d_parent));
-	if (old_path.dentry->d_parent != new_dir_path.dentry)
-	    inode_lock_nested(d_inode(new_dir_path.dentry), I_MUTEX_PARENT);
+	// inode_lock(d_inode(old_path.dentry->d_parent));
+	// if (old_path.dentry->d_parent != new_dir_path.dentry)
+	//     inode_lock_nested(d_inode(new_dir_path.dentry), I_MUTEX_PARENT);
 	
-	ret = vfs_rename(&rd);
-	// ret = kernel_rename(tmp_path, final_path, 0);
-    // if (ret) {
-    //     pr_err("Ramfs_file_flush: 重命名 %s -> %s 失败，错误码 %d\n", 
-    //            tmp_path, final_path, ret);
-    // } else {
-    //     pr_debug("Ramfs_file_flush: 成功同步 %s\n", final_path);
-    // }
-	if (old_path.dentry->d_parent != new_dir_path.dentry)
-	    inode_unlock(d_inode(new_dir_path.dentry));
-	inode_unlock(d_inode(old_path.dentry->d_parent));
+    if (new_dentry && new_dentry->d_inode && new_dentry->d_inode->i_nlink == 0) {
+        char *path_buf = kmalloc(PATH_MAX, GFP_KERNEL);
+        if (path_buf) {
+            char *path_str = d_path(&(struct path){.dentry = new_dentry, .mnt = new_dir_path.mnt}, path_buf, PATH_MAX);
+            if (!IS_ERR(path_str)) {
+                pr_warn("Ramfs_file_flush: 目标文件 %s 的 i_nlink 为 0!\n", path_str);
+            } else {
+                pr_warn("Ramfs_file_flush: 目标文件 inode %lu 的 i_nlink 为 0!\n", 
+                       new_dentry->d_inode->i_ino);
+            }
+            kfree(path_buf);
+        }
+    }
+
+    if (old_path.dentry->d_inode->i_nlink == 0) {
+        char *path_buf = kmalloc(PATH_MAX, GFP_KERNEL);
+        if (path_buf) {
+            char *path_str = d_path(&old_path, path_buf, PATH_MAX);
+            if (!IS_ERR(path_str)) {
+                pr_warn("Ramfs_file_flush: 源文件 %s 的 i_nlink 为 0!\n", path_str);
+            } else {
+                pr_warn("Ramfs_file_flush: 源文件 inode %lu 的 i_nlink 为 0!\n", 
+                       old_path.dentry->d_inode->i_ino);
+            }
+            kfree(path_buf);
+        }
+    }
+
+	// ret = vfs_rename(&rd);
+	// if (old_path.dentry->d_parent != new_dir_path.dentry)
+	//     inode_unlock(d_inode(new_dir_path.dentry));
+	// inode_unlock(d_inode(old_path.dentry->d_parent));
+    struct filename *old_name = getname_kernel(tmp_path);
+    struct filename *new_name = getname_kernel(final_path);
     
+    if (!IS_ERR(old_name) && !IS_ERR(new_name)) {
+        // do_renameat2 内部会接管并释放 filename 对象，不需要再次释放
+        ret = do_renameat2(AT_FDCWD, old_name, AT_FDCWD, new_name, 0);
+    } else {
+        // 如果 getname_kernel 失败，才需要处理错误并释放已分配的对象
+        ret = -ENOMEM;
+        if (!IS_ERR(old_name))
+            putname(old_name);
+        if (!IS_ERR(new_name))
+            putname(new_name);
+    }
+
     dput(new_dentry);
     path_put(&old_path);
     path_put(&new_dir_path);
