@@ -568,40 +568,6 @@ int ramfs_bind(const char *ramfs_path, const char *sync_dir)
         return -ENOMEM;
     }
     
-    /* 打开同步目录以遍历文件 */
-    dir = dentry_open(&sync_path, O_RDONLY | O_DIRECTORY, current_cred());
-    path_put(&sync_path);  /* 释放路径，后面通过 dir 操作 */
-    
-    if (IS_ERR(dir)) {
-        pr_err("ramfs_bind: 无法打开同步目录，错误码 %ld\n", PTR_ERR(dir));
-        /* 保留超级块中的同步目录路径，可能后续会修复同步目录问题 */
-        path_put(&ramfs_mount);
-        return PTR_ERR(dir);
-    }
-    
-    /* 设置目录上下文，包含所需的所有信息 */
-    struct ramfs_dir_context rdc = {
-        .ctx = {
-            .actor = ramfs_readdir_sync,
-            .pos = 0,
-        },
-        .sb = sb,
-        .ramfs_path = ramfs_path,  /* 现在传递ramfs路径 */
-        .sync_dir = fsi->sync_dir
-    };
-    
-    /* 遍历目录并恢复文件 */
-    pr_info("ramfs_bind: 从 %s 同步文件到 %s\n", sync_dir, ramfs_path);
-    error = iterate_dir(dir, &rdc.ctx);
-    
-    filp_close(dir, NULL);
-    path_put(&ramfs_mount);
-    
-    if (error)
-        pr_err("ramfs_bind: 同步过程中发生错误，错误码 %d\n", error);
-    else
-        pr_info("ramfs_bind: 同步完成\n");
-    
     return error;
 }
 
