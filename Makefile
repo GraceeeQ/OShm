@@ -77,13 +77,13 @@ headers:
 build_kernel:
 	make -C kvm/linux-5.15.178 -j$(nproc) 
 # 	make headers
-	
+
+# g++ -static -o ./ctest/$(project) ./ctest/$(project).cpp
+# gcc -static -o ./ctest/$(project) ./ctest/$(project).c
+# g++ -static -o ./ctest/$(project) ./ctest/$(project).cpp
+# g++ -ldl -Wall -I ./kvm/linux-5.15.178/usr/include  -o ./ctest/$(project) ./ctest/$(project).cpp
 ctest:
-	# g++ -static -o ./ctest/$(project) ./ctest/$(project).cpp
-	# gcc -static -o ./ctest/$(project) ./ctest/$(project).c
-	# g++ -static -o ./ctest/$(project) ./ctest/$(project).cpp
-	# g++ -ldl -Wall -I ./kvm/linux-5.15.178/usr/include  -o ./ctest/$(project) ./ctest/$(project).cpp
-	gcc -static -ldl -Wall -o ./ctest/$(project) ./ctest/$(project).c
+	gcc -static -ldl -Wall -pthread -o ./ctest/$(project) ./ctest/$(project).c
 	cp ./ctest/$(project) ./kvm/busybox-1.35.0/_install/bin/
 	cd kvm/busybox-1.35.0/_install && \
 	find . -print0 |	 cpio --null -ov --format=newc | gzip -9 > ../initramfs.cpio.gz

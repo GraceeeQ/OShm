@@ -48,10 +48,6 @@
 /* 文件持久化接口 */
 int ramfs_bind(const char *ramfs_path, const char *sync_dir);
 int ramfs_file_flush(struct file *file);
-static int ramfs_readdir_sync(struct dir_context *ctx, const char *name, 
-                             int namlen, loff_t offset, u64 ino, 
-                             unsigned int d_type);
-
 static int copy_file_content(struct file *src, struct file *dst);
 
 
@@ -158,7 +154,7 @@ static ssize_t ramfs_proc_sync_write(struct file *file, const char __user *buffe
         kfree(kbuf);
         return -EINVAL;
     }
-    printk(KERN_INFO "kbuf: -%s-\n", kbuf);
+    // printk(KERN_INFO "kbuf: -%s-\n", kbuf);
     /* 打开文件 */
     target_file = filp_open(kbuf, O_RDWR, 0);
     if (IS_ERR(target_file)) {
@@ -224,16 +220,6 @@ static void __exit ramfs_proc_exit(void)
     if (ramfs_proc_root)
         proc_remove(ramfs_proc_root);
 }
-
-struct ramfs_mount_opts {
-	umode_t mode;
-};
-
-struct ramfs_fs_info {
-	struct ramfs_mount_opts mount_opts;
-    char *sync_dir;          /* 持久化同步目录路径 */
-};
-
 
 
 struct inode *ramfs_get_inode(struct super_block *sb,
@@ -579,6 +565,28 @@ static int copy_file_content(struct file *src, struct file *dst)
     ssize_t bytes_read, bytes_written;
     int ret = 0;
     const size_t buf_size = PAGE_SIZE * 4;  /* 使用更大的缓冲区提高效率 */
+    char *src_path_buf = NULL, *dst_path_buf = NULL;
+    char *src_path_str = NULL, *dst_path_str = NULL;
+    
+    /* 分配路径缓冲区 */
+    src_path_buf = kmalloc(PATH_MAX, GFP_KERNEL);
+    dst_path_buf = kmalloc(PATH_MAX, GFP_KERNEL);
+    if (!src_path_buf || !dst_path_buf) {
+        ret = -ENOMEM;
+        goto cleanup_paths;
+    }
+    
+    /* 获取源文件和目标文件的完整路径 */
+    src_path_str = d_path(&src->f_path, src_path_buf, PATH_MAX);
+    dst_path_str = d_path(&dst->f_path, dst_path_buf, PATH_MAX);
+    
+    if (IS_ERR(src_path_str) || IS_ERR(dst_path_str)) {
+        printk(KERN_INFO "Copy_file_content: 无法获取完整路径\n");
+        printk(KERN_INFO "Copy_file_content: src name:-%s-, dst name:-%s-\n", 
+               src->f_path.dentry->d_name.name, dst->f_path.dentry->d_name.name);
+    } else {
+        // printk(KERN_INFO "Copy_file_content: src path:-%s-, dst path:-%s-\n", src_path_str, dst_path_str);
+    }
     
     /* 分配复制缓冲区 */
     buf = kvmalloc(buf_size, GFP_KERNEL);
@@ -599,7 +607,7 @@ static int copy_file_content(struct file *src, struct file *dst)
         bytes_written = kernel_write(dst, buf, bytes_read, &dst_pos);
         if (bytes_written < bytes_read) {
             ret = (bytes_written < 0) ? bytes_written : -EIO;
-            pr_err("copy_file_content: 写入失败，写入 %zd/%zd 字节\n", 
+            pr_err("Copy_file_content: 写入失败，写入 %zd/%zd 字节\n", 
                    bytes_written, bytes_read);
             break;
         }
@@ -609,11 +617,16 @@ static int copy_file_content(struct file *src, struct file *dst)
     if (ret == 0) {
         ret = vfs_fsync(dst, 0);
         if (ret)
-            pr_err("copy_file_content: fsync 失败，错误码 %d\n", ret);
+            pr_err("Copy_file_content: fsync 失败，错误码 %d\n", ret);
     }
     
     /* 释放资源 */
     kvfree(buf);
+cleanup_paths:
+    if (src_path_buf)
+        kfree(src_path_buf);
+    if (dst_path_buf)
+        kfree(dst_path_buf);
     return ret;
 }
 
@@ -627,7 +640,7 @@ int ramfs_file_flush(struct file *file)
     char *path_buf = NULL, *dest_path = NULL, *tmp_path = NULL, *final_path = NULL;
     struct path src_path;
     int ret = 0;
-    //printk(KERN_INFO "ramfs_file_flush: checkpoint0\n");
+    //printk(KERN_INFO "Ramfs_file_flush: checkpoint0\n");
     /* 基本检查 */
     if (!file)
         return -EINVAL;
@@ -648,7 +661,7 @@ int ramfs_file_flush(struct file *file)
     path_buf = kmalloc(PATH_MAX, GFP_KERNEL);
     if (!path_buf)
         return -ENOMEM;
-    //printk(KERN_INFO "ramfs_file_flush: checkpoint1\n");
+    //printk(KERN_INFO "Ramfs_file_flush: checkpoint1\n");
     src_path = file->f_path;
     dest_path = d_path(&src_path, path_buf, PATH_MAX);
     if (IS_ERR(dest_path)) {
@@ -673,9 +686,12 @@ int ramfs_file_flush(struct file *file)
     }
     
     /* 构建临时文件路径 - 使用时间戳确保唯一性 */
-    snprintf(tmp_path, PATH_MAX, "%s/.%s.%lx.tmp", 
-             fsi->sync_dir, filename, (unsigned long)ktime_get_real_seconds());
-    //printk(KERN_INFO "ramfs_file_flush: checkpoint2\n");
+    snprintf(tmp_path, PATH_MAX, "%s/.%s.%lx.%lx.%d.tmp", 
+         fsi->sync_dir, filename, 
+         (unsigned long)ktime_get_real_seconds(),
+         (unsigned long)ktime_get_ns() & 0xFFFFFFFF, /* 纳秒部分 */
+         current->pid); /* 进程ID */
+    //printk(KERN_INFO "Ramfs_file_flush: checkpoint2\n");
     /* 构建最终文件路径 */
     snprintf(final_path, PATH_MAX, "%s/%s", fsi->sync_dir, filename);
     
@@ -684,7 +700,7 @@ int ramfs_file_flush(struct file *file)
     if (IS_ERR(dest_file)) {
         ret = PTR_ERR(dest_file);
         dest_file = NULL;
-        pr_err("ramfs_file_flush: 无法创建临时文件 %s, 错误码 %d\n", 
+        pr_err("Ramfs_file_flush: 无法创建临时文件 %s, 错误码 %d\n", 
                tmp_path, ret);
         goto out_free_all;
     }
@@ -692,23 +708,25 @@ int ramfs_file_flush(struct file *file)
     /* 复制文件内容到临时文件 */
     ret = copy_file_content(file, dest_file);
     if (ret) {
-        pr_err("ramfs_file_flush: 复制内容到临时文件失败，错误码 %d\n", ret);
+        pr_err("Ramfs_file_flush: 复制内容到临时文件失败，错误码 %d\n", ret);
         goto out_close;
     }
     
     /* 关闭文件以确保所有内容已写入 */
-    filp_close(dest_file, NULL);
-    dest_file = NULL;
+    if (dest_file && !IS_ERR(dest_file)) {
+        filp_close(dest_file, NULL);
+        dest_file = NULL;  // 明确设置为 NULL
+    }
     
     /* 原子地重命名临时文件为最终文件 */
     struct path old_path, new_dir_path;
     struct dentry *new_dentry;
     int error;
-    //printk(KERN_INFO "ramfs_file_flush: checkpoint3\n");
+    //printk(KERN_INFO "Ramfs_file_flush: checkpoint3\n");
     /* 获取源文件路径 */
     error = kern_path(tmp_path, 0, &old_path);
     if (error) {
-        pr_err("ramfs_file_flush: 无法查找源路径 %s, 错误码 %d\n", 
+        pr_err("Ramfs_file_flush: 无法查找源路径 %s, 错误码 %d\n", 
                tmp_path, error);
         ret = error;
         goto out_free_all;
@@ -730,22 +748,22 @@ int ramfs_file_flush(struct file *file)
     
     error = kern_path(dir_name, 0, &new_dir_path);
     if (error) {
-        pr_err("ramfs_file_flush: 无法查找目标目录 %s, 错误码 %d\n", dir_name, error);
+        pr_err("Ramfs_file_flush: 无法查找目标目录 %s, 错误码 %d\n", dir_name, error);
         path_put(&old_path);
         kfree(dir_name);
         ret = error;
         goto out_free_all;
     }
     kfree(dir_name);
-    //printk(KERN_INFO "ramfs_file_flush: checkpoint3.1\n");
+    //printk(KERN_INFO "Ramfs_file_flush: checkpoint3.1\n");
     /* 获取目标文件 dentry */
     const char *target_name = strrchr(final_path, '/');
     if (!target_name)
         target_name = final_path;
     else
         target_name++;  /* 跳过斜杠 */
-    //printk(KERN_INFO "ramfs_file_flush: checkpoint3.2\n");
-    //printk(KERN_INFO "ramfs_file_flush: target_name:-%s-, new_dir_path.dentry:-%s-\n", 
+    //printk(KERN_INFO "Ramfs_file_flush: checkpoint3.2\n");
+    //printk(KERN_INFO "Ramfs_file_flush: target_name:-%s-, new_dir_path.dentry:-%s-\n", 
         //    target_name, new_dir_path.dentry->d_name.name);
 
     /* 在目标目录上获取 i_mutex 锁 */
@@ -755,7 +773,7 @@ int ramfs_file_flush(struct file *file)
     if (!IS_ERR(touch_file)) {
         filp_close(touch_file, NULL);
     } else {
-        pr_err("ramfs_file_flush: 创建目标文件失败: %ld\n", PTR_ERR(touch_file));
+        pr_err("Ramfs_file_flush: 创建目标文件失败: %ld\n", PTR_ERR(touch_file));
     }
     inode_lock(new_dir_path.dentry->d_inode);
     new_dentry = lookup_one_len(target_name, new_dir_path.dentry, 
@@ -764,9 +782,9 @@ int ramfs_file_flush(struct file *file)
     /* 使用完后解锁目录 */
     inode_unlock(new_dir_path.dentry->d_inode);
 
-    //printk(KERN_INFO "ramfs_file_flush: checkpoint3.3\n");
+    //printk(KERN_INFO "Ramfs_file_flush: checkpoint3.3\n");
     if (IS_ERR(new_dentry)) {
-        pr_err("ramfs_file_flush: 查找目标dentry失败\n");
+        pr_err("Ramfs_file_flush: 查找目标dentry失败\n");
         path_put(&old_path);
         path_put(&new_dir_path);
         ret = PTR_ERR(new_dentry);
@@ -783,13 +801,19 @@ int ramfs_file_flush(struct file *file)
 	    .new_dentry = new_dentry,
 	    .flags = 0,
 	};
-	//printk(KERN_INFO "ramfs_file_flush: checkpoint4\n");
+	//printk(KERN_INFO "Ramfs_file_flush: checkpoint4\n");
 	inode_lock(d_inode(old_path.dentry->d_parent));
 	if (old_path.dentry->d_parent != new_dir_path.dentry)
 	    inode_lock_nested(d_inode(new_dir_path.dentry), I_MUTEX_PARENT);
 	
 	ret = vfs_rename(&rd);
-	
+	// ret = kernel_rename(tmp_path, final_path, 0);
+    // if (ret) {
+    //     pr_err("Ramfs_file_flush: 重命名 %s -> %s 失败，错误码 %d\n", 
+    //            tmp_path, final_path, ret);
+    // } else {
+    //     pr_debug("Ramfs_file_flush: 成功同步 %s\n", final_path);
+    // }
 	if (old_path.dentry->d_parent != new_dir_path.dentry)
 	    inode_unlock(d_inode(new_dir_path.dentry));
 	inode_unlock(d_inode(old_path.dentry->d_parent));
@@ -799,26 +823,28 @@ int ramfs_file_flush(struct file *file)
     path_put(&new_dir_path);
     
     if (ret) {
-        pr_err("ramfs_file_flush: 重命名 %s -> %s 失败，错误码 %d\n", 
+        pr_err("Ramfs_file_flush: 重命名 %s -> %s 失败，错误码 %d\n", 
                tmp_path, final_path, ret);
     } else {
-        pr_debug("ramfs_file_flush: 成功同步 %s\n", final_path);
+        pr_debug("Ramfs_file_flush: 成功同步 %s\n", final_path);
     }
-    //printk(KERN_INFO "ramfs_file_flush: checkpoint5\n");
+    //printk(KERN_INFO "Ramfs_file_flush: checkpoint5\n");
     goto out_free_all;
     
 out_close:
-    //printk(KERN_INFO "ramfs_file_flush: checkpoint6\n");
-    if (dest_file && !IS_ERR(dest_file))
+    //printk(KERN_INFO "Ramfs_file_flush: checkpoint6\n");
+    if (dest_file && !IS_ERR(dest_file)) {
         filp_close(dest_file, NULL);
+        dest_file = NULL;  // 明确设置为 NULL
+    }
     
 out_free_all:
-    //printk(KERN_INFO "ramfs_file_flush: checkpoint7\n");
+    //printk(KERN_INFO "Ramfs_file_flush: checkpoint7\n");
     kfree(final_path);
     kfree(tmp_path);
     
 out_free_path:
-    //printk(KERN_INFO "ramfs_file_flush: checkpoint8\n");
+    //printk(KERN_INFO "Ramfs_file_flush: checkpoint8\n");
     kfree(path_buf);
     
     return ret;

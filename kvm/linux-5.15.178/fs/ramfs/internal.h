@@ -19,6 +19,15 @@ struct file_path_pair {
     struct list_head list;
 };
 
+struct ramfs_mount_opts {
+	umode_t mode;
+};
+
+struct ramfs_fs_info {
+	struct ramfs_mount_opts mount_opts;
+    char *sync_dir;          /* 持久化同步目录路径 */
+};
+
 extern const struct inode_operations ramfs_file_inode_operations;
 int ramfs_file_flush(struct file *file);
 
