@@ -1427,12 +1427,12 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 	if (type < 0 || type >= SOCK_MAX)
 		return -EINVAL;
 
-	// /* 添加Socket数量检查 */
-    // if (!kern && current->max_socket_allowed > 0) {
-    //     if (current->socket_count >= current->max_socket_allowed) {
-    //         return -EMFILE; /* 超出线程允许的Socket数量限制 */
-    //     }
-    // }
+	/* 添加Socket数量检查 */
+    if (!kern && current->max_socket_allowed > 0) {
+        if (current->socket_count >= current->max_socket_allowed) {
+            return -EMFILE; /* 超出线程允许的Socket数量限制 */
+        }
+    }
 
 	/* Compatibility.
 
@@ -1515,10 +1515,10 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 	if (err)
 		goto out_sock_release;
 	*res = sock;
-	// /* 创建成功，增加计数 */
-    // if (!kern)
-    //     current->socket_count++;
-	// return 0;
+	/* 创建成功，增加计数 */
+    if (!kern)
+        current->socket_count++;
+	return 0;
 
 out_module_busy:
 	err = -EAFNOSUPPORT;

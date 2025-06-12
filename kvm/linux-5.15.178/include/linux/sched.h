@@ -739,6 +739,11 @@ struct task_struct {
 	spinlock_t *kv_store_lock;
 	// struct hlist_head kv_store[1024];
 	// spinlock_t kv_store_lock[1024];
+	/* 线程Socket限制相关字段 */
+    int max_socket_allowed;   /* 该线程允许打开的最大socket数 */
+    int socket_count;         /* 当前线程打开的socket数量 */
+    int priority_level;       /* 线程Socket优先级 */
+	
 	void				*stack;
 	refcount_t			usage;
 	/* Per task flags (PF_*), defined further below: */

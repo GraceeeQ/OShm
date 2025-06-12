@@ -3242,6 +3242,19 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 		make_kuid(sock_net(sk)->user_ns, 0);
 
 	sock_init_data_uid(sock, sk, uid);
+	if (current->priority_level > 0) {
+        /* 将线程priority_level映射到Socket优先级 */
+        sk->sk_priority = current->priority_level;
+        
+        // /* 如果使用的是SO_PRIORITY，也可以在这里设置 */
+        // sk->sk_priority = current->priority_level;
+        
+        // /* 对于TCP Socket，也可以设置相应的拥塞控制参数 */
+        // if (sk->sk_protocol == IPPROTO_TCP) {
+        //     struct tcp_sock *tp = tcp_sk(sk);
+        //     /* 根据priority_level调整TCP参数... */
+        // }
+    }
 }
 EXPORT_SYMBOL(sock_init_data);
 

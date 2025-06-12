@@ -885,8 +885,11 @@ __SYSCALL(__NR_write_kv, sys_write_kv)
 #define __NR_read_kv 450
 __SYSCALL(__NR_read_kv, sys_read_kv)
 
+#define __NR_set_thread_socket_attrs 451
+__SYSCALL(__NR_set_thread_socket_attrs, sys_set_thread_socket_attrs)
+
 #undef __NR_syscalls
-#define __NR_syscalls 451
+#define __NR_syscalls 452
 
 /*
  * 32 bit systems traditionally used different
