@@ -16,9 +16,9 @@ struct my_data {
 
 SYSCALL_DEFINE2(write_kv, int, k, int, v)
 {
-	int hash = k % 1024;
+	int hash = k & 0x3FF;
 	struct my_data *new_data;
-	printk(KERN_INFO "write_kv: k=%d, v=%d, hash=%d\n", k, v, hash);
+	// printk(KERN_INFO "write_kv: k=%d, v=%d, hash=%d\n", k, v, hash);
 
 	spin_lock(&current->kv_store_lock[hash]);
 	hlist_for_each_entry (new_data, &current->kv_store[hash], node) {
@@ -43,7 +43,7 @@ SYSCALL_DEFINE2(write_kv, int, k, int, v)
 
 SYSCALL_DEFINE1(read_kv, int, k)
 {
-	int hash = k % 1024;
+	int hash = k & 0x3FF;
 	struct my_data *entry;
 	int v = -2;
 	// printk(KERN_INFO "read_kv: k=%d\n", k);
